@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Цікаві місця{% endblock %}
+{% block content %}
+<h1>5 Цікавих місць для подорожей</h1>
+<ul>
+    {% for place in places %}
+        <li>{{ place }}</li>
+    {% endfor %}
+
+</ul>
+<h2>      Італія : Рим, Венеція, Флоренція,</h2>
+<h2>      Франція: Париж, Ліон,Марсель,</h2>
+<h2>      Японія: Токіо, Кіото, Осака,</h2>
+<button href="{{ url_for('contact') }}">Зв’язатися з агентом</button>
+{% endblock %}
