@@ -1,28 +1,32 @@
 import sqlite3
+import psycopg2
 
-# Підключення до SQLite
-conn = sqlite3.connect("tickets_sqlite.db")
-cursor = conn.cursor()
+# ------------------------- #
+# 1. SQLite — локальна база
+# ------------------------- #
+sqlite_conn = sqlite3.connect("tickets_sqlite.db")
+sqlite_cursor = sqlite_conn.cursor()
 
-# Створення таблиць
-cursor.executescript("""
-DROP TABLE IF EXISTS tickets;
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS events;
 
+sqlite_cursor.execute("DROP TABLE IF EXISTS users")
+sqlite_cursor.execute("DROP TABLE IF EXISTS events")
+sqlite_cursor.execute("DROP TABLE IF EXISTS tickets")
+
+sqlite_cursor.execute("""
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL
-);
-
+    name TEXT,
+    email TEXT
+)
+""")
+sqlite_cursor.execute("""
 CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    location TEXT,
-    date DATE
-);
-
+    title TEXT,
+    location TEXT
+)
+""")
+sqlite_cursor.execute("""
 CREATE TABLE tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -30,59 +34,117 @@ CREATE TABLE tickets (
     price REAL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (event_id) REFERENCES events(id)
-);
+)
 """)
 
-# Дані
-users = [
-    ("Андрій Шевченко", "andriy@example.com"),
-    ("Олена Коваль", "olena@example.com"),
-    ("Ігор Бондар", "ihor@example.com")
-]
 
-events = [
-    ("Концерт 'Океан Ельзи'", "Київ", "2025-11-01"),
-    ("Театральна вистава", "Львів", "2025-11-05"),
-    ("Бізнес-конференція", "Харків", "2025-11-10")
-]
+sqlite_cursor.executemany("INSERT INTO users (name, email) VALUES (?, ?)", [
+    ("Олег", "oleg@example.com"),
+    ("Ірина", "iryna@example.com")
+])
+sqlite_cursor.executemany("INSERT INTO events (title, location) VALUES (?, ?)", [
+    ("Концерт", "Київ"),
+    ("Фестиваль", "Львів")
+])
+sqlite_cursor.executemany("INSERT INTO tickets (user_id, event_id, price) VALUES (?, ?, ?)", [
+    (1, 1, 500),
+    (2, 1, 600),
+    (2, 2, 300)
+])
 
-tickets = [
-    (1, 1, 600.00),
-    (2, 1, 550.00),
-    (3, 1, 620.00),
-    (1, 2, 300.00),
-    (2, 2, 350.00),
-    (3, 3, 700.00),
-    (1, 3, 800.00),
-    (2, 3, 500.00),
-    (3, 1, 580.00),
-    (1, 1, 610.00)
-]
+sqlite_conn.commit()
 
-# Вставка даних
-cursor.executemany("INSERT INTO users (name, email) VALUES (?, ?);", users)
-cursor.executemany("INSERT INTO events (title, location, date) VALUES (?, ?, ?);", events)
-cursor.executemany("INSERT INTO tickets (user_id, event_id, price) VALUES (?, ?, ?);", tickets)
+# ------------------------------- #
+# 2. PostgreSQL — віддалена база
+# ------------------------------- #
 
-# !!! ЗБЕРЕГТИ ЗМІНИ
-conn.commit()
 
-# Перевірка — виведення користувачів
-cursor.execute("SELECT * FROM users;")
-print("Користувачі:")
-for row in cursor.fetchall():
-    print(row)
+PG_USER = "postgres"
+PG_PASSWORD = "12345678"
+PG_HOST = "localhost"
+PG_PORT = "5432"
+PG_DBNAME = "tickets_db"
 
-# Перевірка — виведення квитків
-cursor.execute("""
+pg_conn = psycopg2.connect(
+    dbname=PG_DBNAME,
+    user=PG_USER,
+    password=PG_PASSWORD,
+    host=PG_HOST,
+    port=PG_PORT
+)
+pg_cursor = pg_conn.cursor()
+
+
+pg_cursor.execute("DROP TABLE IF EXISTS tickets")
+pg_cursor.execute("DROP TABLE IF EXISTS users")
+pg_cursor.execute("DROP TABLE IF EXISTS events")
+
+pg_cursor.execute("""
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    email VARCHAR(100)
+)
+""")
+pg_cursor.execute("""
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(100),
+    location VARCHAR(100)
+)
+""")
+pg_cursor.execute("""
+CREATE TABLE tickets (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    event_id INTEGER REFERENCES events(id),
+    price NUMERIC
+)
+""")
+
+
+pg_cursor.executemany("INSERT INTO users (name, email) VALUES (%s, %s)", [
+    ("Наталія", "nata@example.com"),
+    ("Артем", "artem@example.com")
+])
+pg_cursor.executemany("INSERT INTO events (title, location) VALUES (%s, %s)", [
+    ("Startup Day", "Харків"),
+    ("Jazz Fest", "Одеса")
+])
+pg_cursor.executemany("INSERT INTO tickets (user_id, event_id, price) VALUES (%s, %s, %s)", [
+    (1, 1, 550),
+    (2, 2, 800),
+    (1, 2, 900)
+])
+
+pg_conn.commit()
+
+# ------------------------------- #
+# 3. Демонстрація запиту з SQLite
+# ------------------------------- #
+print("\n[SQLite] Квитки з назвами заходів і іменами користувачів:")
+sqlite_cursor.execute("""
 SELECT tickets.id, users.name, events.title, tickets.price
 FROM tickets
 JOIN users ON tickets.user_id = users.id
-JOIN events ON tickets.event_id = events.id;
+JOIN events ON tickets.event_id = events.id
 """)
-print("\nКвитки:")
-for row in cursor.fetchall():
+for row in sqlite_cursor.fetchall():
     print(row)
 
-# Закриття з'єднання
-conn.close()
+# ------------------------------- #
+# 4. Демонстрація запиту з PostgreSQL
+# ------------------------------- #
+print("\n[PostgreSQL] Користувачі, які купили квитки дорожче 600 грн:")
+pg_cursor.execute("""
+SELECT DISTINCT users.name, users.email
+FROM tickets
+JOIN users ON tickets.user_id = users.id
+WHERE tickets.price > 600
+""")
+for row in pg_cursor.fetchall():
+    print(row)
+
+sqlite_conn.close()
+pg_cursor.close()
+pg_conn.close()
