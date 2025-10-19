@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Зчитування текстового файлу</title>
+</head>
+<body>
+    <h1>Завантаж текстовий файл (.txt)</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".txt" required>
+        <button type="submit">Завантажити</button>
+    </form>
+
+    {% if content %}
+        <h2>Вміст файлу:</h2>
+        <pre>{{ content }}</pre>
+    {% endif %}
+</body>
+</html>

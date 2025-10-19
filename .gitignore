@@ -1,2 +1,3 @@
 venvv
-.db
+tickets_sqlite.db
+restaurants.db
